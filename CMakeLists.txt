@@ -15,6 +15,8 @@ add_executable(${PROJECT_NAME}
     ${PROJECT_SOURCE_DIR}/src/main.c
     ${PROJECT_SOURCE_DIR}/src/spi.c
     ${PROJECT_SOURCE_DIR}/src/spi.h
+    ${PROJECT_SOURCE_DIR}/src/mcp2515.c
+    ${PROJECT_SOURCE_DIR}/src/mcp2515.h
 )
 
 include_directories()

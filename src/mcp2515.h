@@ -1,6 +1,9 @@
 #ifndef __MCP2515_H__
 #define __MCP2515_H__
 
+#include <stdlib.h>
+#include "hardware/spi.h"
+
 /** MCP2515 SPI connected CAN controller definitions */
 
 /** TXBnCTRL: TRANSMIT BUFFER n CONTROL REGISTER */
@@ -122,5 +125,19 @@
 #define MCP2515_FILHIT_SET(x)           ( ( ( x ) & MCP2515_FILHIT_MASK ) << MCP2515_FILHIT_BIT )
 #define MCP2515_FILHIT_GET(x)           ( ( ( x ) >> MCP2515_FILHIT_BIT ) & MCP2515_FILHIT_MASK )
 
+#define MCP2515_INST_RESET              ( 0xC0 )
+#define MCP2515_INST_READ               ( 0x03 )
+#define MCP2515_INST_READ_RX_BUFFER     ( 0x90 ) // TODO: Fix this incomplete value
+#define MXP2515_INST_WRITE              ( 0x02 )
+#define MCP2515_INST_LOAD_TX_BUFFER     ( 0x40 ) // TODO: Fix this incomplete value
+#define MCP2515_INST_RTS                ( 0x80 ) // TODO: Fix this incomplete value
+#define MCP2515_INST_READ_STATUS        ( 0xA0 )
+#define MCP2515_INST_RX_STATUS          ( 0xB0 )
+#define MCP2515_INST_BIT_MODIFY         ( 0x05 )
+
+#define MCP2515_CANCTRL (0xF)
+#define MCP2515_CANSTAT (0xE)
+
+extern uint8_t MCP2515_read_reg( spi_inst_t* spi, const uint cs, uint8_t reg );
 
 #endif
