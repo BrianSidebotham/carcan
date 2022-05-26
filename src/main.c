@@ -20,6 +20,7 @@ int main() {
     const uint mosi_pin = 3;
     const uint miso_pin = 4;
     const uint LED_PIN = 25;
+    volatile uint8_t intreg = 0;
 
     spi_inst_t *spi = spi0;
 
@@ -50,11 +51,29 @@ int main() {
         sleep_ms(100);
     } while( MCP2515_get_mode( spi, cs_pin ) != MCP2515_CANCTRL_MODE_CONFIGURATION );
 
+    /* The configuration for
+    /* https://www.kvaser.com/support/calculators/bit-timing-calculator/ */
     MCP2515_set_config( spi, cs_pin, 0x00, 0x91, 0x01 );
+
+    /* Receive all messages */
+    MCP2515_write_reg( spi, cs_pin, MCP2515_RXB0CTRL, 0x3 << MCP2515_RXB0CTRL_RXM_BIT );
+    MCP2515_write_reg( spi, cs_pin, MCP2515_RXB1CTRL, 0x3 << MCP2515_RXB1CTRL_RXM_BIT );
+
+    /* Enter normal operating mode */
+    MCP2515_set_mode( spi, cs_pin, MCP2515_CANCTRL_MODE_NORMAL );
+
+    do {
+        gpio_put(LED_PIN, 1);
+        sleep_ms(100);
+
+        gpio_put(LED_PIN, 0);
+        sleep_ms(500);
+        intreg = MCP2515_get_mode( spi, cs_pin );
+    } while( intreg != MCP2515_CANCTRL_MODE_NORMAL );
 
     gpio_put(LED_PIN, 1);
 
     while (true) {
-
+        intreg = MCP2515_read_reg( spi, cs_pin, MCP2515_CANSTAT );
     }
 }

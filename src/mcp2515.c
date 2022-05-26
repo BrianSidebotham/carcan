@@ -38,3 +38,12 @@ void MCP2515_set_config(
     MCP2515_write_reg( spi, cs, MCP2515_CNF2, cnf2 );
     MCP2515_write_reg( spi, cs, MCP2515_CNF3, cnf3 );
 }
+
+void MCP2515_set_mode(
+        spi_inst_t* spi,
+        const uint cs,
+        const mcp2515_canctrl_reqop_t mode ) {
+    volatile uint8_t ctrl = MCP2515_read_reg(spi, cs, MCP2515_CANCTRL );
+    ctrl = MCP2515_CANCTRL_REQOP_SET( ctrl, mode );
+    MCP2515_write_reg( spi, cs, MCP2515_CANCTRL, ctrl );
+}
