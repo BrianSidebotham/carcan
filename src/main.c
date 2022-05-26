@@ -15,10 +15,10 @@
 #include <stdio.h>
 
 int main() {
-    const uint cs_pin = 17;
-    const uint sck_pin = 18;
-    const uint mosi_pin = 19;
-    const uint miso_pin = 16;
+    const uint cs_pin = 1;
+    const uint sck_pin = 2;
+    const uint mosi_pin = 3;
+    const uint miso_pin = 4;
     const uint LED_PIN = 25;
 
     spi_inst_t *spi = spi0;
@@ -30,6 +30,9 @@ int main() {
     gpio_set_dir(cs_pin, GPIO_OUT);
     gpio_put(cs_pin, 1);
 
+    gpio_init(LED_PIN);
+    gpio_set_dir(LED_PIN, GPIO_OUT);
+
     // Initialise the SPI peripheral
     spi_init(spi, 1000 * 1000);
     spi_set_format( spi, 8, 1, 1, SPI_MSB_FIRST );
@@ -37,18 +40,21 @@ int main() {
     gpio_set_function(mosi_pin, GPIO_FUNC_SPI);
     gpio_set_function(miso_pin, GPIO_FUNC_SPI);
 
-    uint8_t canctrl = MCP2515_read_reg(spi, cs_pin, MCP2515_CANCTRL);
+    /* We must be in configuration mode in order to start configuring the CAN interface*/
+    do {
+        gpio_put(LED_PIN, 1);
+        sleep_ms(100);
+        MCP2515_reset( spi, cs_pin );
 
-    gpio_init(LED_PIN);
-    gpio_set_dir(LED_PIN, GPIO_OUT);
-    while (true) {
-        gpio_put(LED_PIN, 1);
-        sleep_ms(500);
-        gpio_put(LED_PIN, 0);
-        sleep_ms(250);
-        gpio_put(LED_PIN, 1);
-        sleep_ms(200);
         gpio_put(LED_PIN, 0);
         sleep_ms(100);
+    } while( MCP2515_get_mode( spi, cs_pin ) != MCP2515_CANCTRL_MODE_CONFIGURATION );
+
+    MCP2515_set_config( spi, cs_pin, 0x00, 0x91, 0x01 );
+
+    gpio_put(LED_PIN, 1);
+
+    while (true) {
+
     }
 }

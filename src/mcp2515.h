@@ -6,6 +6,10 @@
 
 /** MCP2515 SPI connected CAN controller definitions */
 
+#define MCP2515_CNF1        0x2A
+#define MCP2515_CNF2        0x29
+#define MCP2515_CNF3        0x28
+
 /** TXBnCTRL: TRANSMIT BUFFER n CONTROL REGISTER */
 #define MCP2515_TXB0CTRL    0x30
 #define MCP2515_TXB1CTRL    0x40
@@ -128,7 +132,7 @@
 #define MCP2515_INST_RESET              ( 0xC0 )
 #define MCP2515_INST_READ               ( 0x03 )
 #define MCP2515_INST_READ_RX_BUFFER     ( 0x90 ) // TODO: Fix this incomplete value
-#define MXP2515_INST_WRITE              ( 0x02 )
+#define MCP2515_INST_WRITE              ( 0x02 )
 #define MCP2515_INST_LOAD_TX_BUFFER     ( 0x40 ) // TODO: Fix this incomplete value
 #define MCP2515_INST_RTS                ( 0x80 ) // TODO: Fix this incomplete value
 #define MCP2515_INST_READ_STATUS        ( 0xA0 )
@@ -136,8 +140,28 @@
 #define MCP2515_INST_BIT_MODIFY         ( 0x05 )
 
 #define MCP2515_CANCTRL (0xF)
+#define MCP2515_CANCTRL_REQOP_BIT       (5)
+#define MCP2515_CANCTRL_REQOP_MASK      ( 0x7 << MCP2515_CANCTRL_REQOP_BIT )
+#define MCP2515_CANCTRL_REQOP_VALUE(x)  ( ( x & MCP2515_CANCTRL_REQOP_MASK ) >> MCP2515_CANCTRL_REQOP_BIT )
 #define MCP2515_CANSTAT (0xE)
 
+typedef enum {
+    MCP2515_CANCTRL_MODE_NORMAL = 0x0,
+    MCP2515_CANCTRL_MODE_SLEEP,
+    MCP2515_CANCTRL_MODE_LOOPBACK,
+    MCP2515_CANCTRL_MODE_LISTEN_ONLY,
+    MCP2515_CANCTRL_MODE_CONFIGURATION
+} mcp2515_canctrl_reqop_t;
+
 extern uint8_t MCP2515_read_reg( spi_inst_t* spi, const uint cs, uint8_t reg );
+extern mcp2515_canctrl_reqop_t MCP2515_get_mode(spi_inst_t* spi, const uint cs );
+extern void MCP2515_reset( spi_inst_t* spi, const uint cs );
+extern void MCP2515_write_reg( spi_inst_t* spi, const uint cs, const uint8_t reg, uint8_t value );
+extern void MCP2515_set_config(
+        spi_inst_t* spi,
+        const uint cs,
+        const uint8_t cnf1,
+        const uint8_t cnf2,
+        const uint8_t cnf3 );
 
 #endif
