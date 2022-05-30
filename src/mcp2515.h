@@ -195,7 +195,7 @@
 #define MCP2515_CANCTRL                     ( 0xF )
 #define MCP2515_CANCTRL_REQOP_BIT           (5)
 #define MCP2515_CANCTRL_REQOP_MASK          ( 0x7 << MCP2515_CANCTRL_REQOP_BIT )
-#define MCP2515_CANCTRL_REQOP_SET(x, val)   ( ( x ^ MCP2515_CANCTRL_REQOP_MASK ) | ( val << MCP2515_CANCTRL_REQOP_BIT ) )
+#define MCP2515_CANCTRL_REQOP_SET(x, val)   ( ( x & ~MCP2515_CANCTRL_REQOP_MASK ) | ( val << MCP2515_CANCTRL_REQOP_BIT ) )
 #define MCP2515_CANCTRL_REQOP_VALUE(x)      ( ( x & MCP2515_CANCTRL_REQOP_MASK ) >> MCP2515_CANCTRL_REQOP_BIT )
 
 #define MCP2515_CANSTAT                     ( 0xE )
@@ -238,5 +238,11 @@ extern void MCP2515_set_mode(
         spi_inst_t* spi,
         const uint cs,
         const mcp2515_canctrl_reqop_t mode );
+
+extern void MCP2515_read_rx_buffer(
+        spi_inst_t* spi,
+        const uint cs,
+        const uint8_t id,
+        uint8_t* buffer );
 
 #endif

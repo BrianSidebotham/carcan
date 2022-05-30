@@ -8,7 +8,6 @@
  * @copyright Copyright (c) Brian Sidebotham 2022
  *
  */
-
 #include "pico/stdlib.h"
 #include "mcp2515.h"
 #include "spi.h"
@@ -21,6 +20,7 @@ int main() {
     const uint miso_pin = 4;
     const uint LED_PIN = 25;
     volatile uint8_t intreg = 0;
+    uint8_t rx_buffer[16];
 
     spi_inst_t *spi = spi0;
 
@@ -59,6 +59,12 @@ int main() {
     MCP2515_write_reg( spi, cs_pin, MCP2515_RXB0CTRL, 0x3 << MCP2515_RXB0CTRL_RXM_BIT );
     MCP2515_write_reg( spi, cs_pin, MCP2515_RXB1CTRL, 0x3 << MCP2515_RXB1CTRL_RXM_BIT );
 
+    /* Enable interrupt pin outputs so I can scope to see if anything is ever received! */
+    MCP2515_write_reg( spi, cs_pin, MCP2515_BFPCTRL, MCP2515_B1BFE | MCP2515_B0BFE | MCP2515_B1BFM | MCP2515_B0BFM );
+
+    /* Enable receive interrupts */
+    MCP2515_write_reg( spi, cs_pin, MCP2515_CANINTE, MCP2515_CANINTE_RX0IE | MCP2515_CANINTE_RX1IE );
+
     /* Enter normal operating mode */
     MCP2515_set_mode( spi, cs_pin, MCP2515_CANCTRL_MODE_NORMAL );
 
@@ -74,6 +80,15 @@ int main() {
     gpio_put(LED_PIN, 1);
 
     while (true) {
-        intreg = MCP2515_read_reg( spi, cs_pin, MCP2515_CANSTAT );
+        intreg = MCP2515_read_reg( spi, cs_pin, MCP2515_CANINTF );
+
+        /* Process any message we receive */
+        if( intreg & MCP2515_CANINTF_RX0IF ) {
+            MCP2515_read_rx_buffer(spi, cs_pin, 0, &rx_buffer[0]);
+            gpio_put(LED_PIN, 1);
+            sleep_ms(100);
+            gpio_put(LED_PIN, 0);
+            sleep_ms(100);
+        }
     }
 }
