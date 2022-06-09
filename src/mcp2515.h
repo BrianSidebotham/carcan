@@ -170,6 +170,27 @@
 #define MCP2515_RXB0CTRL_BUKT1_RO           ( 1 << 1 )
 #define MCP2515_RXB0CTRL_FILHIT0            ( 1 << 0 )
 
+#define MCP2515_RXB0SIDL                    0x62
+#define MCP2515_RXB1SIDL                    0x72
+#define MCP2515_RXBnSIDL_SID0_2_BIT         ( 4 )
+#define MCP2515_RXBnSIDL_SID0_2_MASK        ( 0x7 << MCP2515_RXBnSIDL_SID0_2_BIT )
+#define MCP2515_RXBnSIDL_SID0_2_SET(x, val) ( ( x & ~MCP2515_RXBnSIDL_SID0_2_MASK ) | ( val << MCP2515_RXBnSIDL_SID0_2_BIT ) )
+#define MCP2515_RXBnSIDL_SID0_2_VALUE(x)    ( ( x & MCP2515_RXBnSIDL_SID0_2_MASK ) >> MCP2515_RXBnSIDL_SID0_2_BIT )
+#define MCP2515_RXBnSIDL_SRR                ( 1 << 4 )
+#define MCP2515_RXBnSIDL_IDE                ( 1 << 3 )
+#define MCP2515_RXBnSIDL_EID17_16_BIT         ( 0 )
+#define MCP2515_RXBnSIDL_EID17_16_MASK        ( 0x3 << MCP2515_RXBnSIDL_EID17_16_BIT )
+#define MCP2515_RXBnSIDL_EID17_16_SET(x, val) ( ( x & ~MCP2515_RXBnSIDL_EID17_16_MASK ) | ( val << MCP2515_RXBnSIDL_EID17_16_BIT ) )
+#define MCP2515_RXBnSIDL_EID17_16_VALUE(x)    ( ( x & MCP2515_RXBnSIDL_EID17_16_MASK ) >> MCP2515_RXBnSIDL_EID17_16_BIT )
+
+#define MCP2515_RXB0DLC                     0x65
+#define MCP2515_RXB1DLC                     0x75
+#define MCP2515_RXBnDLC_DLC3_0_BIT          ( 0 )
+#define MCP2515_RXBnDLC_DLC3_0_MASK        ( 0x3 << MCP2515_RXBnDLC_DLC3_0_BIT )
+#define MCP2515_RXBnDLC_DLC3_0_SET(x, val) ( ( x & ~MCP2515_RXBnDLC_DLC3_0_MASK ) | ( val << MCP2515_RXBnDLC_DLC3_0_BIT ) )
+#define MCP2515_RXBnDLC_DLC3_0_VALUE(x)    ( ( x & MCP2515_RXBnDLC_DLC3_0_MASK ) >> MCP2515_RXBnDLC_DLC3_0_BIT )
+
+
 /**  RXB1CTRL: RECEIVE BUFFER 1 CONTROL REGISTER (ADDRESS: 70h)*/
 #define MCP2515_RXB1CTRL                    0x70
 #define MCP2515_RXB1CTRL_RXM_BIT            ( 5 )
