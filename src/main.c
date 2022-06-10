@@ -16,6 +16,8 @@
 
 #define CS_PIN              1
 #define CAN_MSG_MAX_LENGTH  8
+#define LED_PIN             25
+#define LED_ON_TICK_COUNT   4
 
 typedef struct {
     uint8_t ready;
@@ -29,6 +31,7 @@ static spi_inst_t *spi = spi0;
 static uint8_t rx_buffer[13] = {0};
 static can_msg_t can_msg = {0};
 
+static int led_on_time = 0;
 
 void mcp2515_interrupt_callback(uint gpio, uint32_t events)
 {
@@ -50,6 +53,11 @@ void mcp2515_interrupt_callback(uint gpio, uint32_t events)
             can_msg.data_length = MCP2515_RXBnDLC_DLC3_0_VALUE(rx_buffer[4]);
             memcpy(&can_msg.data[0], &rx_buffer[5], CAN_MSG_MAX_LENGTH);
             can_msg.ready = 1;
+
+            if( can_msg.eid == 0x2000 )
+            {
+                led_on_time = LED_ON_TICK_COUNT;
+            }
         }
 
         /* Clear the interrupt flags so we can receive another interrupt */
@@ -57,16 +65,24 @@ void mcp2515_interrupt_callback(uint gpio, uint32_t events)
     }
 }
 
+bool tick_callback(struct repeating_timer *t)
+{
+    if( led_on_time ) {
+        gpio_put(LED_PIN, 1);
+        led_on_time--;
+    } else {
+        gpio_put(LED_PIN, 0);
+    }
+}
 
 int main() {
 
     const uint sck_pin = 2;
     const uint mosi_pin = 3;
     const uint miso_pin = 4;
-    const uint LED_PIN = 25;
     const uint MCP2515_INT_PIN = 16;
     volatile uint8_t intreg = 0;
-
+    struct repeating_timer timer;
 
     stdio_init_all();
 
@@ -79,7 +95,7 @@ int main() {
     gpio_set_dir(LED_PIN, GPIO_OUT);
 
     /* The GPIO16 pin is connected to the MCP2515 interrupt pin which can then tell us to perform some function to do with the CAN bus */
-    gpio_set_irq_enabled_with_callback(MCP2515_INT_PIN, GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, true, &mcp2515_interrupt_callback);
+    gpio_set_irq_enabled_with_callback(MCP2515_INT_PIN, GPIO_IRQ_EDGE_FALL, true, &mcp2515_interrupt_callback);
 
     // Initialise the SPI peripheral
     spi_init(spi, 1000 * 1000);
@@ -122,20 +138,11 @@ int main() {
         intreg = MCP2515_get_mode( spi, CS_PIN );
     } while( intreg != MCP2515_CANCTRL_MODE_NORMAL );
 
-    gpio_put(LED_PIN, 1);
+    /* Add a repeating timer at 10ms no matter how long the timer callback takes to interrupt */
+    add_repeating_timer_ms(10, tick_callback, NULL, &timer);
 
     while (true) {
-        if( can_msg.ready )
-        {
-            can_msg.ready = 0;
-            if( can_msg.eid == 0x2000 )
-            {
-                gpio_put(LED_PIN, 1);
-                sleep_ms(40);
-                gpio_put(LED_PIN, 0);
-                sleep_ms(40);
-            }
-        }
+        tight_loop_contents();
     }
 }
 
