@@ -3,6 +3,7 @@
 
 #include <stdlib.h>
 #include "hardware/spi.h"
+#include "spi.h"
 
 /** MCP2515 SPI connected CAN controller definitions */
 
@@ -230,40 +231,39 @@ typedef enum {
 } mcp2515_canctrl_reqop_t;
 
 extern uint8_t MCP2515_read_reg(
-        spi_inst_t* spi,
-        const uint cs,
+        spidrv_t* spi,
         uint8_t reg );
 
 extern mcp2515_canctrl_reqop_t MCP2515_get_mode(
-        spi_inst_t* spi,
-        const uint cs );
+        spidrv_t* spi );
 
 extern void MCP2515_reset(
-        spi_inst_t* spi,
-        const uint cs );
+        spidrv_t* spi );
 
 extern void MCP2515_write_reg(
-        spi_inst_t* spi,
-        const uint cs,
+        spidrv_t* spi,
         const uint8_t reg,
         uint8_t value );
 
 extern void MCP2515_set_config(
-        spi_inst_t* spi,
-        const uint cs,
+        spidrv_t* spi,
         const uint8_t cnf1,
         const uint8_t cnf2,
         const uint8_t cnf3 );
 
 extern void MCP2515_set_mode(
-        spi_inst_t* spi,
-        const uint cs,
+        spidrv_t* spi,
         const mcp2515_canctrl_reqop_t mode );
 
 extern void MCP2515_read_rx_buffer(
-        spi_inst_t* spi,
-        const uint cs,
+        spidrv_t* spi,
         const uint8_t id,
         uint8_t* buffer );
+
+void MCP2515_bit_modify(
+        spidrv_t* spi,
+        const uint8_t reg,
+        const uint8_t mask,
+        const uint8_t value );
 
 #endif

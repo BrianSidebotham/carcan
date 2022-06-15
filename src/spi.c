@@ -3,63 +3,57 @@
 #include "hardware/gpio.h"
 #include "hardware/spi.h"
 
+static uint spi_index = 0;
+static spidrv_t spi_drivers[SPI_MAX_DRIVERS] = {0};
 
-/**
- * @brief Write @a nbytes of data to the SPI bus. Chip select is controlled within this function
- *
- * @param spi
- * @param cs
- * @param data
- * @param nbytes
- */
-void SPI_write_bytes( spi_inst_t* spi,
-                     const uint cs,
-                     const uint8_t* data,
-                     const uint8_t nbytes )
+spidrv_t* SPI_init(const uint chip_select, spi_inst_t* spi, uint baud_rate)
 {
-    gpio_put(cs, 0);
-    spi_write_blocking(spi, data, nbytes);
-    gpio_put(cs, 1);
+    if( spi_index > SPI_MAX_DRIVERS ) {
+        return NULL;
+    }
+
+    spidrv_t* sd = &spi_drivers[spi_index];
+    sd->chip_select = chip_select;
+    sd->spihw = spi;
+
+    /* Initialise the actual hardware layer */
+    spi_init(spi, 1000 * 1000);
+
+    spi_index++;
+    return sd;
 }
 
 
-/**
- * @brief Read @a nbytes of data from the SPI bus. Chip select is controlled within this function
- *
- * @param spi
- * @param cs
- * @param data
- * @param nbytes
- */
-void SPI_read_bytes( spi_inst_t* spi,
-                     const uint cs,
-                     uint8_t* data,
-                     const uint8_t nbytes )
+void SPI_write_bytes( spidrv_t* sd, const uint8_t* data, const uint8_t nbytes )
 {
-    gpio_put(cs, 0);
-    spi_read_blocking(spi, 0x00, data, nbytes);
-    gpio_put(cs, 1);
+    gpio_put(sd->chip_select, 0);
+    spi_write_blocking(sd->spihw, data, nbytes);
+    gpio_put(sd->chip_select, 1);
 }
 
 
-/**
- * @brief In a single transaction write @a wr_nbytes and then read @a rd_nbytes into the read buffer
- *
- * @param spi
- * @param cs
- * @param wr_data
- * @param wr_nbytes
- * @param rd_data
- * @param rd_nbytes
- */
-void SPI_write_read_bytes( spi_inst_t* spi,
-                           const uint cs,
+void SPI_read_bytes( spidrv_t* sd, uint8_t* data, const uint8_t nbytes )
+{
+    gpio_put(sd->chip_select, 0);
+    spi_read_blocking(sd->spihw, 0x00, data, nbytes);
+    gpio_put(sd->chip_select, 1);
+}
+
+
+void SPI_write_read_bytes( spidrv_t* sd,
                            const uint8_t* wr_data,
                            const uint8_t wr_nbytes,
                            uint8_t* rd_data,
-                           const uint8_t rd_nbytes ) {
-    gpio_put(cs, 0);
-    spi_write_blocking(spi, wr_data, wr_nbytes);
-    spi_read_blocking(spi, 0x00, rd_data, rd_nbytes);
-    gpio_put(cs, 1);
+                           const uint8_t rd_nbytes )
+{
+    gpio_put(sd->chip_select, 0);
+    spi_write_blocking(sd->spihw, wr_data, wr_nbytes);
+    spi_read_blocking(sd->spihw, 0x00, rd_data, rd_nbytes);
+    gpio_put(sd->chip_select, 1);
+}
+
+
+void SPI_set_format( spidrv_t* sd, uint data_bits, spi_cpol_t cpol, spi_cpha_t cpha, spi_order_t order)
+{
+    spi_set_format(sd->spihw, data_bits, cpol, cpha, order);
 }

@@ -18,6 +18,9 @@
 #define CAN_MSG_MAX_LENGTH  8
 #define LED_PIN             25
 #define LED_ON_TICK_COUNT   4
+#define SCK_PIN             2
+#define MOSI_PIN            3
+#define MISO_PIN            4
 
 typedef struct {
     uint8_t ready;
@@ -27,7 +30,7 @@ typedef struct {
     uint8_t data[CAN_MSG_MAX_LENGTH];
 } can_msg_t;
 
-static spi_inst_t *spi = spi0;
+static spidrv_t* spi;
 static uint8_t rx_buffer[13] = {0};
 static can_msg_t can_msg = {0};
 
@@ -36,13 +39,19 @@ static int led_on_time = 0;
 void mcp2515_interrupt_callback(uint gpio, uint32_t events)
 {
     /* Process receiving a message from the MCP2515 CAN Controller */
-    uint8_t intreg = MCP2515_read_reg( spi, CS_PIN, MCP2515_CANINTF );
+    uint8_t intreg = MCP2515_read_reg( spi, MCP2515_CANINTF );
     uint8_t rx_buffer[13];
     uint32_t id = 0;
 
-    if( intreg & MCP2515_CANINTF_RX0IF )
+    if( ( intreg & MCP2515_CANINTF_RX0IF ) || ( intreg & MCP2515_CANINTF_RX1IF ) )
     {
-        MCP2515_read_rx_buffer(spi, CS_PIN, 0, &rx_buffer[0]);
+        if( intreg & MCP2515_CANINTF_RX0IF ) {
+            id = 0;
+        } else {
+            id = 1;
+        }
+
+        MCP2515_read_rx_buffer(spi, id, &rx_buffer[0]);
         if( rx_buffer[1] & MCP2515_RXBnSIDL_IDE )
         {
             /* Received a frame with an extended ID */
@@ -60,8 +69,17 @@ void mcp2515_interrupt_callback(uint gpio, uint32_t events)
             }
         }
 
-        /* Clear the interrupt flags so we can receive another interrupt */
-        MCP2515_write_reg(spi, CS_PIN, MCP2515_CANINTF, 0x00);
+        /* Clear the interrupt flag so we can receive another interrupt */
+        if( id == 0 ) {
+            MCP2515_bit_modify( spi, MCP2515_CANINTF, ~MCP2515_CANINTF_RX0IF, 0x00 );
+        } else {
+            MCP2515_bit_modify( spi, MCP2515_CANINTF, ~MCP2515_CANINTF_RX1IF, 0x00 );
+        }
+    }
+    else
+    {
+        /* Some other interrupt source we can't process yet ! */
+        MCP2515_write_reg( spi, MCP2515_CANINTF, 0x00 );
     }
 }
 
@@ -77,9 +95,6 @@ bool tick_callback(struct repeating_timer *t)
 
 int main() {
 
-    const uint sck_pin = 2;
-    const uint mosi_pin = 3;
-    const uint miso_pin = 4;
     const uint MCP2515_INT_PIN = 16;
     volatile uint8_t intreg = 0;
     struct repeating_timer timer;
@@ -87,47 +102,50 @@ int main() {
     stdio_init_all();
 
     // Set up the Chip select pin for SPI
-    gpio_init(CS_PIN);
-    gpio_set_dir(CS_PIN, GPIO_OUT);
-    gpio_put(CS_PIN, 1);
+    gpio_init( CS_PIN );
+    gpio_set_dir( CS_PIN, GPIO_OUT );
+    gpio_put( CS_PIN, 1 );
 
-    gpio_init(LED_PIN);
-    gpio_set_dir(LED_PIN, GPIO_OUT);
+    gpio_init( LED_PIN );
+    gpio_set_dir( LED_PIN, GPIO_OUT );
 
     /* The GPIO16 pin is connected to the MCP2515 interrupt pin which can then tell us to perform some function to do with the CAN bus */
-    gpio_set_irq_enabled_with_callback(MCP2515_INT_PIN, GPIO_IRQ_EDGE_FALL, true, &mcp2515_interrupt_callback);
+    gpio_set_irq_enabled_with_callback( MCP2515_INT_PIN,
+                                        GPIO_IRQ_EDGE_FALL,
+                                        true,
+                                        &mcp2515_interrupt_callback );
 
     // Initialise the SPI peripheral
-    spi_init(spi, 1000 * 1000);
-    spi_set_format( spi, 8, 1, 1, SPI_MSB_FIRST );
-    gpio_set_function(sck_pin, GPIO_FUNC_SPI);
-    gpio_set_function(mosi_pin, GPIO_FUNC_SPI);
-    gpio_set_function(miso_pin, GPIO_FUNC_SPI);
+    spidrv_t* spi = SPI_init( CS_PIN, spi0, 1000*1000 );
+    SPI_set_format( spi, 8, 1, 1, SPI_MSB_FIRST );
+    gpio_set_function( SCK_PIN, GPIO_FUNC_SPI );
+    gpio_set_function( MOSI_PIN, GPIO_FUNC_SPI );
+    gpio_set_function( MOSI_PIN, GPIO_FUNC_SPI );
 
     /* We must be in configuration mode in order to start configuring the CAN interface*/
     do {
         gpio_put(LED_PIN, 1);
         sleep_ms(100);
-        MCP2515_reset( spi, CS_PIN );
+        MCP2515_reset( spi );
 
         gpio_put(LED_PIN, 0);
         sleep_ms(100);
-    } while( MCP2515_get_mode( spi, CS_PIN ) != MCP2515_CANCTRL_MODE_CONFIGURATION );
+    } while( MCP2515_get_mode( spi ) != MCP2515_CANCTRL_MODE_CONFIGURATION );
 
     /* The configuration for
     /* https://www.kvaser.com/support/calculators/bit-timing-calculator/ */
-    MCP2515_set_config( spi, CS_PIN, 0x00, 0x91, 0x01 );
+    MCP2515_set_config( spi, 0x00, 0x91, 0x01 );
 
     /* Receive all messages */
-    MCP2515_write_reg( spi, CS_PIN, MCP2515_RXB0CTRL, 0x3 << MCP2515_RXB0CTRL_RXM_BIT );
-    MCP2515_write_reg( spi, CS_PIN, MCP2515_RXB1CTRL, 0x3 << MCP2515_RXB1CTRL_RXM_BIT );
+    MCP2515_write_reg( spi, MCP2515_RXB0CTRL, 0x3 << MCP2515_RXB0CTRL_RXM_BIT );
+    MCP2515_write_reg( spi, MCP2515_RXB1CTRL, 0x3 << MCP2515_RXB1CTRL_RXM_BIT );
 
     /* Enable interrupt pin outputs so I can scope to see if anything is ever received! */
-    MCP2515_write_reg( spi, CS_PIN, MCP2515_BFPCTRL, MCP2515_B1BFE | MCP2515_B0BFE | MCP2515_B1BFM | MCP2515_B0BFM );
-    MCP2515_write_reg( spi, CS_PIN, MCP2515_CANINTE, MCP2515_CANINTE_RX0IE | MCP2515_CANINTE_RX1IE );
+    MCP2515_write_reg( spi, MCP2515_BFPCTRL, MCP2515_B1BFE | MCP2515_B0BFE | MCP2515_B1BFM | MCP2515_B0BFM );
+    MCP2515_write_reg( spi, MCP2515_CANINTE, MCP2515_CANINTE_RX0IE | MCP2515_CANINTE_RX1IE );
 
     /* Enter normal operating mode */
-    MCP2515_set_mode( spi, CS_PIN, MCP2515_CANCTRL_MODE_NORMAL );
+    MCP2515_set_mode( spi, MCP2515_CANCTRL_MODE_NORMAL );
 
     do {
         gpio_put(LED_PIN, 1);
@@ -135,7 +153,7 @@ int main() {
 
         gpio_put(LED_PIN, 0);
         sleep_ms(500);
-        intreg = MCP2515_get_mode( spi, CS_PIN );
+        intreg = MCP2515_get_mode( spi );
     } while( intreg != MCP2515_CANCTRL_MODE_NORMAL );
 
     /* Add a repeating timer at 10ms no matter how long the timer callback takes to interrupt */
