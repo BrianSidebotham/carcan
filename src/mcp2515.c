@@ -2,6 +2,7 @@
 #include "mcp2515.h"
 #include "spi.h"
 
+
 void MCP2515_reset( spidrv_t* spi ) {
     uint8_t reset_instruction[] = { MCP2515_INST_RESET };
     SPI_write_bytes( spi, &reset_instruction[0], sizeof( reset_instruction ) );
