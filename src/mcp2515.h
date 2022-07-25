@@ -69,14 +69,14 @@
 #define MCP2515_TXB1CTRL                    0x40
 #define MCP2515_TXB2CTRL                    0x50
 
-#define MCP2515_TCBCTRL_ABTF                ( 1 << 6 )
-#define MCP2515_TCBCTRL_MLOA                ( 1 << 5 )
-#define MCP2515_TCBCTRL_TXERR               ( 1 << 4 )
-#define MCP2515_TCBCTRL_TXREQ               ( 1 << 3 )
-#define MCP2515_TCBCTRL_TXP1                ( 1 << 1 )
-#define MCP2515_TCBCTRL_TXP0                ( 1 << 0 )
+#define MCP2515_TXBnCTRL_ABTF               ( 1 << 6 )
+#define MCP2515_TXBnCTRL_MLOA               ( 1 << 5 )
+#define MCP2515_TXBnCTRL_TXERR              ( 1 << 4 )
+#define MCP2515_TXBnCTRL_TXREQ              ( 1 << 3 )
+#define MCP2515_TXBnCTRL_TXP1               ( 1 << 1 )
+#define MCP2515_TXBnCTRL_TXP0               ( 1 << 0 )
 
-#define MCP2515_TCBCTRL_TXP                 ( 3 << 0 )
+#define MCP2515_TXBnCTRL_TXP                ( 3 << 0 )
 
 #define MCP2515_TRANSMIT_PRIORITY_HIGHEST   3
 #define MCP2515_TRANSMIT_PRIORITY_HIGH      2
@@ -260,10 +260,17 @@ extern void MCP2515_read_rx_buffer(
         const uint8_t id,
         uint8_t* buffer );
 
-void MCP2515_bit_modify(
+extern void MCP2515_bit_modify(
         spidrv_t* spi,
         const uint8_t reg,
         const uint8_t mask,
         const uint8_t value );
+
+extern void MCP2515_write_tx_buffer(
+        spidrv_t* spi,
+        uint16_t id,
+        const uint8_t* data,
+        const uint8_t nbytes
+    );
 
 #endif

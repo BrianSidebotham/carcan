@@ -39,6 +39,15 @@ static can_msg_t can_msg = {0};
 
 static int led_on_time = 0;
 
+/* The state of the local GPIO pins */
+static uint8_t gpio_switches[2] = {0};
+
+/* The state of the switches last received from the CAN bus */
+static uint8_t can_switches[2] = {0};
+
+/* Set to non-zero when the MCP2515 interrupt pin has been active */
+static volatile int mcp2515_interrupt = 0;
+
 void mcp2515_interrupt_callback(uint gpio, uint32_t events)
 {
     /* Only processing interrupts when spi has been configured */
@@ -46,10 +55,43 @@ void mcp2515_interrupt_callback(uint gpio, uint32_t events)
         return;
     }
 
+    // Flag that the interrupt ocurred and use foreground processing to read the MCP2515 data
+    mcp2515_interrupt = 1;
+}
+
+void mcp2515_post_interrupt_process() {
     /* Process receiving a message from the MCP2515 CAN Controller */
     uint8_t intreg = MCP2515_read_reg( spi, MCP2515_CANINTF );
     uint8_t rx_buffer[13];
     uint32_t id = 0;
+    bool int_cleared = false;
+
+    if( intreg & MCP2515_CANINTF_TX0IF ) {
+        MCP2515_bit_modify(
+                spi,
+                MCP2515_CANINTF,
+                MCP2515_CANINTF_TX0IF,
+                ~MCP2515_CANINTF_TX0IF );
+        int_cleared = true;
+    }
+
+    if( intreg & MCP2515_CANINTF_TX1IF ) {
+        MCP2515_bit_modify(
+                spi,
+                MCP2515_CANINTF,
+                MCP2515_CANINTF_TX1IF,
+                ~MCP2515_CANINTF_TX1IF );
+        int_cleared = true;
+    }
+
+    if( intreg & MCP2515_CANINTF_TX2IF ) {
+        MCP2515_bit_modify(
+                spi,
+                MCP2515_CANINTF,
+                MCP2515_CANINTF_TX2IF,
+                ~MCP2515_CANINTF_TX2IF );
+        int_cleared = true;
+    }
 
     if( ( intreg & MCP2515_CANINTF_RX0IF ) || ( intreg & MCP2515_CANINTF_RX1IF ) )
     {
@@ -75,20 +117,37 @@ void mcp2515_interrupt_callback(uint gpio, uint32_t events)
             {
                 led_on_time = LED_ON_TICK_COUNT;
             }
+            else if ( ( can_msg.eid > 0x2000 ) && ( can_msg.eid < 0x2006 ) )
+            {
+                led_on_time = LED_ON_TICK_COUNT;
+            }
+            else
+            {
+                /* If we receive switch data on the bus we */
+                if( can_msg.eid == 0x4000 )
+                {
+                    led_on_time = LED_ON_TICK_COUNT;
+                    can_switches[0] = can_msg.data[0];
+                    can_switches[1] = can_msg.data[0];
+                }
+            }
         }
 
         /* Clear the interrupt flag so we can receive another interrupt */
         if( id == 0 ) {
-            MCP2515_bit_modify( spi, MCP2515_CANINTF, ~MCP2515_CANINTF_RX0IF, 0x00 );
+            MCP2515_bit_modify( spi, MCP2515_CANINTF, MCP2515_CANINTF_RX0IF, ~MCP2515_CANINTF_RX0IF );
+            int_cleared = true;
         } else {
-            MCP2515_bit_modify( spi, MCP2515_CANINTF, ~MCP2515_CANINTF_RX1IF, 0x00 );
+            MCP2515_bit_modify( spi, MCP2515_CANINTF, MCP2515_CANINTF_RX1IF, ~MCP2515_CANINTF_RX1IF );
+            int_cleared = true;
         }
-        // MCP2515_write_reg( spi, MCP2515_CANINTF, 0x00 );
     }
     else
     {
-        /* Some other interrupt source we can't process yet ! */
-        MCP2515_write_reg( spi, MCP2515_CANINTF, 0x00 );
+        if( !int_cleared ) {
+            /* Some other interrupt source we can't process yet ! */
+            MCP2515_write_reg( spi, MCP2515_CANINTF, 0x00 );
+        }
     }
 }
 
@@ -120,18 +179,11 @@ int main() {
     gpio_set_dir( LED_PIN, GPIO_OUT );
 
     gpio_init( SWITCH_PIN );
-    gpio_pull_up( SWITCH_PIN );
-    gpio_set_dir( SWITCH_PIN, GPIO_IN );
+    gpio_pull_up( SWITCH_PIN );    gpio_set_dir( SWITCH_PIN, GPIO_IN );
 
     gpio_init( SWITCH_LED_PIN );
     gpio_set_dir( SWITCH_LED_PIN, GPIO_OUT );
 
-/*
-    gpio_set_irq_enabled_with_callback( MCP2515_INT_PIN,
-                                        GPIO_IRQ_EDGE_FALL,
-                                        true,
-                                        &mcp2515_interrupt_callback );
-*/
     /* The GPIO16 pin is connected to the MCP2515 interrupt pin which can then tell us to perform some function to do with the CAN bus */
     gpio_init( MCP2515_INT_PIN );
     gpio_pull_up( MCP2515_INT_PIN );
@@ -157,13 +209,36 @@ int main() {
     /* https://www.kvaser.com/support/calculators/bit-timing-calculator/ */
     MCP2515_set_config( spi, 0x00, 0x91, 0x01 );
 
-    /* Receive all messages */
-    MCP2515_write_reg( spi, MCP2515_RXB0CTRL, 0x3 << MCP2515_RXB0CTRL_RXM_BIT );
-    MCP2515_write_reg( spi, MCP2515_RXB1CTRL, 0x3 << MCP2515_RXB1CTRL_RXM_BIT );
+    /* Receive all messages, we're not interested in masking the messages, we'll filter
+       them in software instead */
+    MCP2515_write_reg(
+            spi,
+            MCP2515_RXB0CTRL,
+            0x3 << MCP2515_RXB0CTRL_RXM_BIT );
+
+    MCP2515_write_reg(
+            spi,
+            MCP2515_RXB1CTRL,
+            0x3 << MCP2515_RXB1CTRL_RXM_BIT );
 
     /* Enable interrupt pin outputs so I can scope to see if anything is ever received! */
-    MCP2515_write_reg( spi, MCP2515_BFPCTRL, MCP2515_B1BFE | MCP2515_B0BFE | MCP2515_B1BFM | MCP2515_B0BFM );
-    MCP2515_write_reg( spi, MCP2515_CANINTE, MCP2515_CANINTE_RX0IE | MCP2515_CANINTE_RX1IE );
+    MCP2515_write_reg(
+            spi,
+            MCP2515_BFPCTRL,
+            ( MCP2515_B1BFE |
+              MCP2515_B0BFE |
+              MCP2515_B1BFM |
+              MCP2515_B0BFM ) );
+
+    /* Enable interrupt generation for all transmit and receive buffers */
+    MCP2515_write_reg(
+            spi,
+            MCP2515_CANINTE,
+            ( MCP2515_CANINTE_TX0IE |
+              MCP2515_CANINTE_TX1IE |
+              MCP2515_CANINTE_TX2IE |
+              MCP2515_CANINTE_RX0IE |
+              MCP2515_CANINTE_RX1IE ) );
 
     /* Enter normal operating mode */
     MCP2515_set_mode( spi, MCP2515_CANCTRL_MODE_NORMAL );
@@ -189,12 +264,35 @@ int main() {
     /* Add a repeating timer at 10ms no matter how long the timer callback takes to interrupt */
     add_repeating_timer_ms(10, tick_callback, NULL, &timer);
 
-    while (true) {
+    while( true ) {
         tight_loop_contents();
-        if( gpio_get( SWITCH_PIN ) ) {
-            gpio_put( SWITCH_LED_PIN, 0 );
+
+        // Process any MCP2515 activity required
+        if( mcp2515_interrupt ) {
+            mcp2515_interrupt = 0;
+            mcp2515_post_interrupt_process();
+        }
+
+        /* Edge detect the change in switch state and transmit a CAN message when it changes
+           state to update the remote value of the switches */
+        if( !gpio_get( SWITCH_PIN ) ) {
+            if( ( gpio_switches[0] & ( 1 << 0) ) == 0 ) {
+                gpio_switches[0] |= ( 1 << 0 );
+                MCP2515_write_tx_buffer(spi, 0x4000, &gpio_switches[0], 2);
+            }
         } else {
-            gpio_put( SWITCH_LED_PIN, 1);
+            if( gpio_switches[0] & ( 1 << 0) ) {
+                gpio_switches[0] &= ~( 1 << 0 );
+                MCP2515_write_tx_buffer(spi, 0x4000, &gpio_switches[0], 2);
+            }
+        }
+
+        /* Tie the LED PIN output to the switch output whether the switch state is received via
+           the CAN bus or the GPIO inputs */
+        if( can_switches[0] & ( 1 << 0 ) ) {
+            gpio_put( SWITCH_LED_PIN, 1 );
+        } else {
+            gpio_put( SWITCH_LED_PIN, 0 );
         }
     }
 }

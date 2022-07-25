@@ -12,7 +12,11 @@ set(CMAKD_BUILD_TYPE Debug)
 pico_sdk_init()
 
 add_executable(${PROJECT_NAME}
+    ${PROJECT_SOURCE_DIR}/src/circular_buffer.c
+    ${PROJECT_SOURCE_DIR}/src/circular_buffer.h
     ${PROJECT_SOURCE_DIR}/src/main.c
+    ${PROJECT_SOURCE_DIR}/src/mem_allocator_malloc.c
+    ${PROJECT_SOURCE_DIR}/src/mem_allocator.h
     ${PROJECT_SOURCE_DIR}/src/spi.c
     ${PROJECT_SOURCE_DIR}/src/spi.h
     ${PROJECT_SOURCE_DIR}/src/mcp2515.c
