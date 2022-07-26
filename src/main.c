@@ -13,6 +13,7 @@
 #include "spi.h"
 #include <stdio.h>
 #include <string.h>
+#include "circular_buffer.h"
 
 #define CS_PIN                      1
 #define CAN_MSG_MAX_LENGTH          8
@@ -35,7 +36,6 @@ typedef struct {
 } can_msg_t;
 
 static spidrv_t* spi = NULL;
-static can_msg_t can_msg = {0};
 
 static int led_on_time = 0;
 
@@ -47,6 +47,8 @@ static uint8_t can_switches[2] = {0};
 
 /* Set to non-zero when the MCP2515 interrupt pin has been active */
 static volatile int mcp2515_interrupt = 0;
+
+static circular_buffer_t* can_messages = NULL;
 
 void mcp2515_interrupt_callback(uint gpio, uint32_t events)
 {
@@ -65,6 +67,7 @@ void mcp2515_post_interrupt_process() {
     uint8_t rx_buffer[13];
     uint32_t id = 0;
     bool int_cleared = false;
+    can_msg_t can_msg;
 
     if( intreg & MCP2515_CANINTF_TX0IF ) {
         MCP2515_bit_modify(
@@ -113,24 +116,8 @@ void mcp2515_post_interrupt_process() {
             memcpy(&can_msg.data[0], &rx_buffer[5], CAN_MSG_MAX_LENGTH);
             can_msg.ready = 1;
 
-            if( can_msg.eid == 0x2000 )
-            {
-                led_on_time = LED_ON_TICK_COUNT;
-            }
-            else if ( ( can_msg.eid > 0x2000 ) && ( can_msg.eid < 0x2006 ) )
-            {
-                led_on_time = LED_ON_TICK_COUNT;
-            }
-            else
-            {
-                /* If we receive switch data on the bus we */
-                if( can_msg.eid == 0x4000 )
-                {
-                    led_on_time = LED_ON_TICK_COUNT;
-                    can_switches[0] = can_msg.data[0];
-                    can_switches[1] = can_msg.data[0];
-                }
-            }
+            /* Add the CAN message to the circular buffer of RX CAN messages */
+            CBUF_put(can_messages, &can_msg);
         }
 
         /* Clear the interrupt flag so we can receive another interrupt */
@@ -163,10 +150,36 @@ bool tick_callback(struct repeating_timer *t)
     return true;
 }
 
+void process_can_message( can_msg_t msg )
+{
+    if( msg.eid == 0x2000 )
+    {
+        led_on_time = LED_ON_TICK_COUNT;
+    }
+    else if ( ( msg.eid > 0x2000 ) && ( msg.eid < 0x2006 ) )
+    {
+        led_on_time = LED_ON_TICK_COUNT;
+    }
+    else
+    {
+        /* If we receive switch data on the bus we */
+        if( msg.eid == 0x4000 )
+        {
+            led_on_time = LED_ON_TICK_COUNT;
+            can_switches[0] = msg.data[0];
+            can_switches[1] = msg.data[0];
+        }
+    }
+}
+
 int main() {
 
     volatile uint8_t intreg = 0;
     struct repeating_timer timer;
+    can_msg_t msg;
+
+    /* Create a circular buffer of CAN messages so we have somewhere to store received messages */
+    can_messages = CBUF_create( 10, sizeof( can_msg_t ) );
 
     stdio_init_all();
 
@@ -179,7 +192,8 @@ int main() {
     gpio_set_dir( LED_PIN, GPIO_OUT );
 
     gpio_init( SWITCH_PIN );
-    gpio_pull_up( SWITCH_PIN );    gpio_set_dir( SWITCH_PIN, GPIO_IN );
+    gpio_pull_up( SWITCH_PIN );
+    gpio_set_dir( SWITCH_PIN, GPIO_IN );
 
     gpio_init( SWITCH_LED_PIN );
     gpio_set_dir( SWITCH_LED_PIN, GPIO_OUT );
@@ -266,6 +280,11 @@ int main() {
 
     while( true ) {
         tight_loop_contents();
+
+        /* See if there is a CAN message to process and process it as necessary */
+        if( CBUF_get(can_messages, &msg) ) {
+            process_can_message( msg );
+        }
 
         // Process any MCP2515 activity required
         if( mcp2515_interrupt ) {
